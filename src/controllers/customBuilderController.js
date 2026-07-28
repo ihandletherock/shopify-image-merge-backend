@@ -70,31 +70,27 @@ exports.generateSilhouette = async (req, res, next) => {
 
     const { buffer: imageBuffer, mimeType } = parseDataUrl(uploaded_image, 'uploaded_image');
     const extension = extensionFromMimeType(mimeType);
-    const tempPath = createTempImageFile(imageBuffer, extension);
+    const imageFile = await OpenAI.toFile(imageBuffer, `uploaded-image.${extension}`, { type: mimeType });
 
-    try {
-      const result = await openai.images.edit({
-        model: 'gpt-image-1',
-        image: fs.createReadStream(tempPath),
-        prompt: prompt,
-        size: '1024x1024',
-        n: 1
-      });
+    const result = await openai.images.edit({
+      model: 'gpt-image-1',
+      image: imageFile,
+      prompt: prompt,
+      size: '1024x1024',
+      n: 1
+    });
 
-      const base64 = result?.data?.[0]?.b64_json;
-      if (!base64) {
-        throw new Error('OpenAI did not return an edited image.');
-      }
-
-      const generatedImage = `data:image/png;base64,${base64}`;
-
-      return res.json({
-        success: true,
-        generated_image: generatedImage
-      });
-    } finally {
-      fs.unlink(tempPath, () => {});
+    const base64 = result?.data?.[0]?.b64_json;
+    if (!base64) {
+      throw new Error('OpenAI did not return an edited image.');
     }
+
+    const generatedImage = `data:image/png;base64,${base64}`;
+
+    return res.json({
+      success: true,
+      generated_image: generatedImage
+    });
   } catch (error) {
     next(error);
   }
