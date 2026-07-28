@@ -7,21 +7,37 @@ const { uploadBufferToCloudinary } = require('../utils/cloudinaryUpload');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-function dataUrlToBuffer(dataUrl, fieldName = 'image') {
+function parseDataUrl(dataUrl, fieldName = 'image') {
   if (!dataUrl || typeof dataUrl !== 'string') {
     throw new Error(`${fieldName} is required.`);
   }
 
-  const match = dataUrl.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
   if (!match) {
     throw new Error(`${fieldName} must be a valid base64 image data URL.`);
   }
 
-  return Buffer.from(match[1], 'base64');
+  return {
+    buffer: Buffer.from(match[2], 'base64'),
+    mimeType: match[1]
+  };
 }
 
-function createTempImageFile(buffer) {
-  const fileName = `openai-${crypto.randomBytes(6).toString('hex')}.png`;
+function extensionFromMimeType(mimeType) {
+  switch (mimeType.toLowerCase()) {
+    case 'image/jpeg':
+      return 'jpg';
+    case 'image/png':
+      return 'png';
+    case 'image/webp':
+      return 'webp';
+    default:
+      return 'bin';
+  }
+}
+
+function createTempImageFile(buffer, extension = 'png') {
+  const fileName = `openai-${crypto.randomBytes(6).toString('hex')}.${extension}`;
   const filePath = path.join(os.tmpdir(), fileName);
   fs.writeFileSync(filePath, buffer);
   return filePath;
@@ -52,8 +68,9 @@ exports.generateSilhouette = async (req, res, next) => {
       });
     }
 
-    const imageBuffer = dataUrlToBuffer(uploaded_image, 'uploaded_image');
-    const tempPath = createTempImageFile(imageBuffer);
+    const { buffer: imageBuffer, mimeType } = parseDataUrl(uploaded_image, 'uploaded_image');
+    const extension = extensionFromMimeType(mimeType);
+    const tempPath = createTempImageFile(imageBuffer, extension);
 
     try {
       const result = await openai.images.edit({
@@ -147,16 +164,16 @@ exports.composeGearImages = async (req, res, next) => {
     const hash = crypto.randomBytes(6).toString('hex');
     const folder = `custom-builder/${product?.handle || 'builder'}/${hash}`;
 
-    const uploadedImageBuffer = dataUrlToBuffer(uploaded_image, 'uploaded_image');
-    const gear1Buffer = dataUrlToBuffer(gear1ComposedImage, 'gear_1.composed_image');
-    const gear2Buffer = dataUrlToBuffer(gear2ComposedImage, 'gear_2.composed_image');
-    const previewBuffer = dataUrlToBuffer(previewImageDataUrl, 'preview_image');
+    const uploadedImageData = parseDataUrl(uploaded_image, 'uploaded_image');
+    const gear1ImageData = parseDataUrl(gear1ComposedImage, 'gear_1.composed_image');
+    const gear2ImageData = parseDataUrl(gear2ComposedImage, 'gear_2.composed_image');
+    const previewImageData = parseDataUrl(previewImageDataUrl, 'preview_image');
 
     const [uploadedImageUpload, gear1Upload, gear2Upload, previewUpload] = await Promise.all([
-      uploadBufferToCloudinary(uploadedImageBuffer, folder, 'uploaded-image'),
-      uploadBufferToCloudinary(gear1Buffer, folder, 'gear-1'),
-      uploadBufferToCloudinary(gear2Buffer, folder, 'gear-2'),
-      uploadBufferToCloudinary(previewBuffer, folder, 'preview')
+      uploadBufferToCloudinary(uploadedImageData.buffer, folder, 'uploaded-image'),
+      uploadBufferToCloudinary(gear1ImageData.buffer, folder, 'gear-1'),
+      uploadBufferToCloudinary(gear2ImageData.buffer, folder, 'gear-2'),
+      uploadBufferToCloudinary(previewImageData.buffer, folder, 'preview')
     ]);
 
     return res.json({
