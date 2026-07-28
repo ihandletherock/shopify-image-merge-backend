@@ -1,5 +1,11 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const OpenAI = require('openai');
 const { uploadBufferToCloudinary } = require('../utils/cloudinaryUpload');
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 function dataUrlToBuffer(dataUrl, fieldName = 'image') {
   if (!dataUrl || typeof dataUrl !== 'string') {
@@ -13,6 +19,69 @@ function dataUrlToBuffer(dataUrl, fieldName = 'image') {
 
   return Buffer.from(match[1], 'base64');
 }
+
+function createTempImageFile(buffer) {
+  const fileName = `openai-${crypto.randomBytes(6).toString('hex')}.png`;
+  const filePath = path.join(os.tmpdir(), fileName);
+  fs.writeFileSync(filePath, buffer);
+  return filePath;
+}
+
+exports.generateSilhouette = async (req, res, next) => {
+  try {
+    const { uploaded_image, prompt } = req.body || {};
+
+    if (!uploaded_image) {
+      return res.status(422).json({
+        success: false,
+        message: 'uploaded_image is required.'
+      });
+    }
+
+    if (!prompt) {
+      return res.status(422).json({
+        success: false,
+        message: 'prompt is required.'
+      });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        message: 'OpenAI API key is not configured.'
+      });
+    }
+
+    const imageBuffer = dataUrlToBuffer(uploaded_image, 'uploaded_image');
+    const tempPath = createTempImageFile(imageBuffer);
+
+    try {
+      const result = await openai.images.edit({
+        model: 'gpt-image-1',
+        image: fs.createReadStream(tempPath),
+        prompt: prompt,
+        size: '1024x1024',
+        n: 1
+      });
+
+      const base64 = result?.data?.[0]?.b64_json;
+      if (!base64) {
+        throw new Error('OpenAI did not return an edited image.');
+      }
+
+      const generatedImage = `data:image/png;base64,${base64}`;
+
+      return res.json({
+        success: true,
+        generated_image: generatedImage
+      });
+    } finally {
+      fs.unlink(tempPath, () => {});
+    }
+  } catch (error) {
+    next(error);
+  }
+};
 
 exports.composeGearImages = async (req, res, next) => {
   try {
