@@ -77,6 +77,8 @@ exports.generateSilhouette = async (req, res, next) => {
       image: imageFile,
       prompt: prompt,
       size: '1024x1024',
+      background: 'transparent',
+      output_format: 'png',
       n: 1
     });
 
