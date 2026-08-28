@@ -5,18 +5,10 @@ const path = require('path');
 const OpenAI = require('openai');
 const { uploadBufferToCloudinary } = require('../utils/cloudinaryUpload');
 
-function openAIFetch(url, options = {}) {
-  return globalThis.fetch(url, {
-    ...options,
-    ...(options.body ? { duplex: 'half' } : {})
-  });
-}
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   maxRetries: Number(process.env.OPENAI_MAX_RETRIES || 3),
-  timeout: Number(process.env.OPENAI_TIMEOUT_MS || 120000),
-  fetch: openAIFetch
+  timeout: Number(process.env.OPENAI_TIMEOUT_MS || 120000)
 });
 
 function isOpenAIConnectionError(error) {
@@ -129,8 +121,19 @@ exports.generateSilhouette = async (req, res, next) => {
       generated_image: generatedImage
     });
   } catch (error) {
+    console.error('========== OPENAI IMAGE ERROR ==========');
+    console.error('name:', error?.name);
+    console.error('message:', error?.message);
+    console.error('code:', error?.code);
+    console.error('status:', error?.status);
+    console.error('type:', error?.type);
+    console.error('cause:', error?.cause);
+    console.error('cause name:', error?.cause?.name);
+    console.error('cause message:', error?.cause?.message);
+    console.error('stack:', error?.stack);
+    console.error('=========================================');
+
     if (isOpenAIConnectionError(error)) {
-      console.error('OpenAI image generation connection failed:', error);
       return res.status(503).json({
         success: false,
         message: 'Image generation service is temporarily unavailable. Please try again.'
