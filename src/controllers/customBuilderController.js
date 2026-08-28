@@ -5,7 +5,16 @@ const path = require('path');
 const OpenAI = require('openai');
 const { uploadBufferToCloudinary } = require('../utils/cloudinaryUpload');
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  maxRetries: Number(process.env.OPENAI_MAX_RETRIES || 3),
+  timeout: Number(process.env.OPENAI_TIMEOUT_MS || 120000)
+});
+
+function isOpenAIConnectionError(error) {
+  const connectionCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN']);
+  return error?.name === 'APIConnectionError' || connectionCodes.has(error?.code) || connectionCodes.has(error?.cause?.code);
+}
 
 function parseDataUrl(dataUrl, fieldName = 'image') {
   if (!dataUrl || typeof dataUrl !== 'string') {
@@ -94,6 +103,14 @@ exports.generateSilhouette = async (req, res, next) => {
       generated_image: generatedImage
     });
   } catch (error) {
+    if (isOpenAIConnectionError(error)) {
+      console.error('OpenAI image generation connection failed:', error);
+      return res.status(503).json({
+        success: false,
+        message: 'Image generation service is temporarily unavailable. Please try again.'
+      });
+    }
+
     next(error);
   }
 };

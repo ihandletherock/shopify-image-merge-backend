@@ -33,10 +33,13 @@ JSON body:
 
 ## Render deploy steps
 1. Upload this project to GitHub or zip and deploy on Render.
-2. Add env vars from `.env.example`
+2. Add `OPENAI_API_KEY` and the Cloudinary environment variables in Render's Environment settings.
 3. Use `npm install`
 4. Start command:
    `npm start`
+
+OpenAI image generation retries temporary connection failures automatically. You can optionally tune
+`OPENAI_MAX_RETRIES` (default `3`) and `OPENAI_TIMEOUT_MS` (default `120000`) in Render.
 
 ## Important
 Right now the image compose logic is a **starter backend**:
