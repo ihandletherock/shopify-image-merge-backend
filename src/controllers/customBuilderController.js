@@ -5,11 +5,18 @@ const path = require('path');
 const OpenAI = require('openai');
 const { uploadBufferToCloudinary } = require('../utils/cloudinaryUpload');
 
+function openAIFetch(url, options = {}) {
+  return globalThis.fetch(url, {
+    ...options,
+    ...(options.body ? { duplex: 'half' } : {})
+  });
+}
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   maxRetries: Number(process.env.OPENAI_MAX_RETRIES || 3),
   timeout: Number(process.env.OPENAI_TIMEOUT_MS || 120000),
-  fetch: globalThis.fetch
+  fetch: openAIFetch
 });
 
 function isOpenAIConnectionError(error) {
