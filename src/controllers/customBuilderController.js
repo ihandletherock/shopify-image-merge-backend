@@ -8,12 +8,31 @@ const { uploadBufferToCloudinary } = require('../utils/cloudinaryUpload');
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   maxRetries: Number(process.env.OPENAI_MAX_RETRIES || 3),
-  timeout: Number(process.env.OPENAI_TIMEOUT_MS || 120000)
+  timeout: Number(process.env.OPENAI_TIMEOUT_MS || 120000),
+  fetch: globalThis.fetch
 });
 
 function isOpenAIConnectionError(error) {
   const connectionCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN']);
   return error?.name === 'APIConnectionError' || connectionCodes.has(error?.code) || connectionCodes.has(error?.cause?.code);
+}
+
+exports.checkOpenAIConnection = async (req, res) => {
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ success: false, status: 'missing_api_key' });
+  }
+
+  try {
+    await openai.models.list();
+    return res.json({ success: true, status: 'connected' });
+  } catch (error) {
+    console.error('OpenAI connectivity check failed:', error);
+    return res.status(isOpenAIConnectionError(error) ? 503 : error.status || 502).json({
+      success: false,
+      status: isOpenAIConnectionError(error) ? 'connection_failed' : 'api_error',
+      message: error.status === 401 ? 'OpenAI rejected the API key.' : 'OpenAI connectivity check failed.'
+    });
+  }
 }
 
 function parseDataUrl(dataUrl, fieldName = 'image') {
