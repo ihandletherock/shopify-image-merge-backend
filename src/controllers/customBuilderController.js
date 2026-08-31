@@ -12,8 +12,59 @@ const openai = new OpenAI({
 });
 
 function isOpenAIConnectionError(error) {
-  const connectionCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN']);
+  const connectionCodes = new Set(['ECONNRESET', 'ETIMETOUT', 'ECONNREFUSED', 'EAI_AGAIN']);
   return error?.name === 'APIConnectionError' || connectionCodes.has(error?.code) || connectionCodes.has(error?.cause?.code);
+}
+
+function mapOpenAIError(error) {
+  const message = error?.message || 'Image generation failed.';
+  const status = Number(error?.status || 500);
+
+  if (error?.status === 401 || /api key|unauthorized|authentication/i.test(message)) {
+    return {
+      status: 401,
+      code: 'invalid_api_key',
+      message: 'OpenAI rejected the API key. Check the key in Render environment settings.'
+    };
+  }
+
+  if (error?.status === 429 || /rate limit|too many requests/i.test(message)) {
+    return {
+      status: 429,
+      code: 'rate_limited',
+      message: 'OpenAI rate limit reached. Please wait a moment and try again.'
+    };
+  }
+
+  if (error?.status === 400 || /model.*(not found|not available)|unsupported|invalid.*image|invalid_request/i.test(message)) {
+    return {
+      status: 400,
+      code: 'invalid_request',
+      message: 'OpenAI rejected the image-generation request. Check the selected model and request format.'
+    };
+  }
+
+  if (error?.status === 404 || /model.*not found|not available/i.test(message)) {
+    return {
+      status: 404,
+      code: 'model_not_found',
+      message: 'The configured OpenAI image model is unavailable for this account.'
+    };
+  }
+
+  if (isOpenAIConnectionError(error) || error?.status === 502 || error?.status === 503 || /temporar|timeout|network|socket|connection/i.test(message)) {
+    return {
+      status: 503,
+      code: 'connection_failed',
+      message: 'Image generation service is temporarily unavailable. Please try again.'
+    };
+  }
+
+  return {
+    status: Number.isFinite(status) && status > 0 ? status : 500,
+    code: error?.code || 'openai_error',
+    message
+  };
 }
 
 exports.checkOpenAIConnection = async (req, res) => {
@@ -133,14 +184,12 @@ exports.generateSilhouette = async (req, res, next) => {
     console.error('stack:', error?.stack);
     console.error('=========================================');
 
-    if (isOpenAIConnectionError(error)) {
-      return res.status(503).json({
-        success: false,
-        message: 'Image generation service is temporarily unavailable. Please try again.'
-      });
-    }
-
-    next(error);
+    const { status, code, message } = mapOpenAIError(error);
+    return res.status(status).json({
+      success: false,
+      status: code,
+      message
+    });
   }
 };
 
