@@ -46,7 +46,20 @@ async function drawTextLayers(image, textItems) {
 async function applySimpleEffect(image, effect) {
   const value = String(effect || '').toLowerCase();
 
-  if (value.includes('splatter')) {
+  if (value.includes('gradient')) {
+    try {
+      image.posterize(4).contrast(0.25).brightness(0.08);
+      image.color([
+        { apply: 'mix', params: [0x7d3cff, 0.28] },
+        { apply: 'mix', params: [0xef3a9a, 0.22] },
+        { apply: 'mix', params: [0x13bafc, 0.18] }
+      ]);
+    } catch (e) {
+      image.posterize(4).contrast(0.2);
+    }
+  } else if (value.includes('mosaic')) {
+    image.posterize(8).contrast(0.18).brightness(0.05);
+  } else if (value.includes('splatter')) {
     image.contrast(0.12).posterize(20);
   } else if (value.includes('vintage')) {
     image.sepia().contrast(0.05);
