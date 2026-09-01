@@ -151,7 +151,7 @@ exports.generateSilhouette = async (req, res, next) => {
     const imageFile = await OpenAI.toFile(imageBuffer, `uploaded-image.${extension}`, { type: mimeType });
 
     const result = await openai.images.edit({
-      model: 'gpt-image-1',
+      model: 'gpt-image-2',
       image: imageFile,
       prompt: prompt,
       size: '1024x1024',
